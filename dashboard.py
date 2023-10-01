@@ -211,224 +211,89 @@ elif st.session_state.selected_menu == "Food Security":
 elif st.session_state.selected_menu == "Children Nourishment":
     st.header("Children Nourishment")
     st.write("This page presents a comprehensive analysis of child nourishment trends over the years, focusing on underweight, stunting, and wasting metrics. Through these visual representations, we aim to shed light on the nutritional challenges faced by children in various countries, emphasizing the need for targeted interventions and policies.")
-    # You can add visualizations related to Children Nourishment here
 
-    # Read the CSV file
-    underweight_children_df = pd.read_csv('datasets/share-of-children-with-a-weight-too-low-for-their-height-wasting.csv')
+    # The given code uses a similar procedure for underweight, stunting, and wasting data. 
+    # I will replace the bar plots with line plots for each of these metrics.
 
-    # List of countries you want to include in the plot
-    selected_countries = ['China', 'Malaysia', 'Russia', 'Vietnam', 'Turkey', 'Indonesia', 'Thailand', 'Philippines']
+    metrics = [
+        {
+            'file': 'datasets/share-of-children-with-a-weight-too-low-for-their-height-wasting.csv',
+            'value_name': 'Prevalence of wasting, weight for height (% of children under 5)',
+            'plot_title': 'Underweight Trends Over Time',
+            'y_axis_title': 'Underweight'
+        },
+        {
+            'file': 'datasets/share-of-children-younger-than-5-who-suffer-from-stunting.csv',
+            'value_name': 'Prevalence of stunting, height for age (% of children under 5)',
+            'plot_title': 'Stunting Trends Over Time',
+            'y_axis_title': 'Stunting'
+        },
+        {
+            'file': 'datasets/share-of-children-with-a-weight-too-low-for-their-height-wasting.csv',
+            'value_name': 'Prevalence of wasting, weight for height (% of children under 5)',
+            'plot_title': 'Wasting Trends Over Time',
+            'y_axis_title': 'Wasting'
+        }
+    ]
 
-    # Filter data for selected countries
-    filtered_data = underweight_children_df[underweight_children_df['Entity'].isin(selected_countries)]
+    for metric in metrics:
+        # Read the CSV file
+        df = pd.read_csv(metric['file'])
 
-    # Pivot the filtered data
-    pivot_filtered_data = filtered_data.pivot_table(
-        values='Prevalence of wasting, weight for height (% of children under 5)',
-        index='Entity',
-        columns='Year'
-    )
+        # List of countries you want to include in the plot
+        selected_countries = ['China', 'Malaysia', 'Russia', 'Vietnam', 'Turkey', 'Indonesia', 'Thailand', 'Philippines']
 
-    # Create an empty DataFrame to store regression coefficients
-    coefficients_df = pd.DataFrame(index=filtered_data['Entity'].unique(), columns=['Intercept', 'Coefficient'])
+        # Filter data for selected countries
+        filtered_data = df[df['Entity'].isin(selected_countries)]
 
-    # Iterate over unique countries and perform linear regression
-    for country in filtered_data['Entity'].unique():
-        country_data = filtered_data[filtered_data['Entity'] == country]
-        X = country_data['Year'].values.reshape(-1, 1)
-        y = country_data['Prevalence of wasting, weight for height (% of children under 5)'].values
+        # Pivot the filtered data
+        pivot_filtered_data = filtered_data.pivot_table(
+            values=metric['value_name'],
+            index='Entity',
+            columns='Year'
+        )
 
-        model = LinearRegression()
-        model.fit(X, y)
+        # Fill missing values using linear regression and other processing (retained from the original code)
+        coefficients_df = pd.DataFrame(index=filtered_data['Entity'].unique(), columns=['Intercept', 'Coefficient'])
 
-        coefficients_df.loc[country, 'Intercept'] = model.intercept_
-        coefficients_df.loc[country, 'Coefficient'] = model.coef_[0]
+        for country in filtered_data['Entity'].unique():
+            country_data = filtered_data[filtered_data['Entity'] == country]
+            X = country_data['Year'].values.reshape(-1, 1)
+            y = country_data[metric['value_name']].values
 
-    # Display the coefficients DataFrame
-    # print(coefficients_df)
+            model = LinearRegression()
+            model.fit(X, y)
 
-    # Fill missing values using linear regression
-    for i in range(len(pivot_filtered_data)):
-        country = pivot_filtered_data.index[i]
-        intercept = coefficients_df.loc[country, 'Intercept']
-        coefficient = coefficients_df.loc[country, 'Coefficient']
-        missing_values = pivot_filtered_data.iloc[i].isnull()
-        years = missing_values.index
-        predicted_values = intercept + coefficient * years
+            coefficients_df.loc[country, 'Intercept'] = model.intercept_
+            coefficients_df.loc[country, 'Coefficient'] = model.coef_[0]
 
-        pivot_filtered_data.loc[country, years] = pivot_filtered_data.loc[country, years].combine_first(pd.Series(predicted_values, index=years))
+        for i in range(len(pivot_filtered_data)):
+            country = pivot_filtered_data.index[i]
+            intercept = coefficients_df.loc[country, 'Intercept']
+            coefficient = coefficients_df.loc[country, 'Coefficient']
+            missing_values = pivot_filtered_data.iloc[i].isnull()
+            years = missing_values.index
+            predicted_values = intercept + coefficient * years
+            pivot_filtered_data.loc[country, years] = pivot_filtered_data.loc[country, years].combine_first(pd.Series(predicted_values, index=years))
 
-    # Set negative values to zero
-    pivot_filtered_data[pivot_filtered_data < 0] = 0
+        pivot_filtered_data[pivot_filtered_data < 0] = 0
 
-    # Display the DataFrame with missing values filled
-    # print(pivot_filtered_data)
+        # Reset the index for the plot
+        pivot_filtered_data_reset = pivot_filtered_data.reset_index()
 
-    # Reset the index for the plot
-    pivot_filtered_data_reset = pivot_filtered_data.reset_index()
+        # Melt the DataFrame for plotting
+        melted_data = pd.melt(pivot_filtered_data_reset, id_vars=['Entity'], var_name='Year', value_name='Metric Value')
 
-    # Melt the DataFrame for plotting
-    melted_data = pd.melt(pivot_filtered_data_reset, id_vars=['Entity'], var_name='Year', value_name='Metric Value')
+        # Plot the data using Plotly Express LINE PLOT
+        fig = px.line(melted_data, x='Year', y='Metric Value', color='Entity',
+                    title=metric['plot_title'],
+                    labels={'Metric Value': 'Metric Value', 'Entity': 'Country', 'Year': 'Year'})
 
-    # # Plot the data using Plotly Express
-    # fig = px.line(melted_data, x='Year', y='Metric Value', color='Entity',
-    #             title='Underweight Trends Over Time',
-    #             labels={'Metric Value': 'Metric Value', 'Entity': 'Country', 'Year': 'Year'})
+        # Update layout for better readability
+        fig.update_layout(xaxis_title='Year', yaxis_title=metric['y_axis_title'])
 
-    # # Update layout for better readability
-    # fig.update_layout(xaxis_title='Year', yaxis_title='Metric Value')
-
-    # # Show the plot
-    # st.plotly_chart(fig)
-
-
-    # Plot bar chart using Plotly Express
-    fig = px.bar(melted_data, x='Year', y='Metric Value', color='Entity', barmode='group',
-                title='Trends of Underweight Over Time',
-                labels={'Metric Value': 'Metric Value', 'Entity': 'Country', 'Year': 'Year'})
-
-    # Update layout for better readability
-    fig.update_layout(xaxis_title='Year', yaxis_title='Underweight')
-
-    # Show the plot
-    st.plotly_chart(fig)
-
-    # STUNTING
-    # Read the CSV file
-    stunting_children_df = pd.read_csv('datasets/share-of-children-younger-than-5-who-suffer-from-stunting.csv')
-
-    # List of countries you want to include in the plot
-    selected_countries = ['China', 'Malaysia', 'Russia', 'Vietnam', 'Turkey', 'Indonesia', 'Thailand', 'Philippines']
-
-    # Filter data for selected countries
-    filtered_data = stunting_children_df[stunting_children_df['Entity'].isin(selected_countries)]
-
-    # Pivot the filtered data
-    pivot_filtered_data = filtered_data.pivot_table(
-        values='Prevalence of stunting, height for age (% of children under 5)',
-        index='Entity',
-        columns='Year'
-    )
-
-    # Create an empty DataFrame to store regression coefficients
-    coefficients_df = pd.DataFrame(index=filtered_data['Entity'].unique(), columns=['Intercept', 'Coefficient'])
-
-    # Iterate over unique countries and perform linear regression
-    for country in filtered_data['Entity'].unique():
-        country_data = filtered_data[filtered_data['Entity'] == country]
-        X = country_data['Year'].values.reshape(-1, 1)
-        y = country_data['Prevalence of stunting, height for age (% of children under 5)'].values
-
-        model = LinearRegression()
-        model.fit(X, y)
-
-        coefficients_df.loc[country, 'Intercept'] = model.intercept_
-        coefficients_df.loc[country, 'Coefficient'] = model.coef_[0]
-
-    # Display the coefficients DataFrame
-    print(coefficients_df)
-
-    # Fill missing values using linear regression
-    for i in range(len(pivot_filtered_data)):
-        country = pivot_filtered_data.index[i]
-        intercept = coefficients_df.loc[country, 'Intercept']
-        coefficient = coefficients_df.loc[country, 'Coefficient']
-        missing_values = pivot_filtered_data.iloc[i].isnull()
-        years = missing_values.index
-        predicted_values = intercept + coefficient * years
-
-        pivot_filtered_data.loc[country, years] = pivot_filtered_data.loc[country, years].combine_first(pd.Series(predicted_values, index=years))
-
-    # Set negative values to zero
-    pivot_filtered_data[pivot_filtered_data < 0] = 0
-
-    # Display the DataFrame with missing values filled
-    print(pivot_filtered_data)
-
-    # Reset the index for the plot
-    pivot_filtered_data_reset = pivot_filtered_data.reset_index()
-
-    # Melt the DataFrame for plotting
-    melted_data = pd.melt(pivot_filtered_data_reset, id_vars=['Entity'], var_name='Year', value_name='Metric Value')
-
-    # Plot bar chart using Plotly Express
-    fig = px.bar(melted_data, x='Year', y='Metric Value', color='Entity', barmode='group',
-                title='Trends of Stunting in Children Under 5 Over Time',
-                labels={'Metric Value': 'Stunting', 'Entity': 'Country', 'Year': 'Year'})
-
-    # Update layout for better readability
-    fig.update_layout(xaxis_title='Year', yaxis_title='Stunting')
-
-    # Show the plot
-    st.plotly_chart(fig)
-
-    # Read the CSV file
-    wasting_children_df = pd.read_csv('datasets/share-of-children-with-a-weight-too-low-for-their-height-wasting.csv')
-
-    # List of countries you want to include in the plot
-    selected_countries = ['China', 'Malaysia', 'Russia', 'Vietnam', 'Turkey', 'Indonesia', 'Thailand', 'Philippines']
-
-    # Filter data for selected countries
-    filtered_data = wasting_children_df[wasting_children_df['Entity'].isin(selected_countries)]
-
-    # Pivot the filtered data
-    pivot_filtered_data = filtered_data.pivot_table(
-        values='Prevalence of wasting, weight for height (% of children under 5)',
-        index='Entity',
-        columns='Year'
-    )
-
-    # Create an empty DataFrame to store regression coefficients
-    coefficients_df = pd.DataFrame(index=filtered_data['Entity'].unique(), columns=['Intercept', 'Coefficient'])
-
-    # Iterate over unique countries and perform linear regression
-    for country in filtered_data['Entity'].unique():
-        country_data = filtered_data[filtered_data['Entity'] == country]
-        X = country_data['Year'].values.reshape(-1, 1)
-        y = country_data['Prevalence of wasting, weight for height (% of children under 5)'].values
-
-        model = LinearRegression()
-        model.fit(X, y)
-
-        coefficients_df.loc[country, 'Intercept'] = model.intercept_
-        coefficients_df.loc[country, 'Coefficient'] = model.coef_[0]
-
-    # Display the coefficients DataFrame
-    print(coefficients_df)
-
-    # Fill missing values using linear regression
-    for i in range(len(pivot_filtered_data)):
-        country = pivot_filtered_data.index[i]
-        intercept = coefficients_df.loc[country, 'Intercept']
-        coefficient = coefficients_df.loc[country, 'Coefficient']
-        missing_values = pivot_filtered_data.iloc[i].isnull()
-        years = missing_values.index
-        predicted_values = intercept + coefficient * years
-
-        pivot_filtered_data.loc[country, years] = pivot_filtered_data.loc[country, years].combine_first(pd.Series(predicted_values, index=years))
-
-    # Set negative values to zero
-    pivot_filtered_data[pivot_filtered_data < 0] = 0
-
-    # Display the DataFrame with missing values filled
-    print(pivot_filtered_data)
-
-    # Reset the index for the plot
-    pivot_filtered_data_reset = pivot_filtered_data.reset_index()
-
-    # Melt the DataFrame for plotting
-    melted_data = pd.melt(pivot_filtered_data_reset, id_vars=['Entity'], var_name='Year', value_name='Metric Value')
-
-    # Plot bar chart using Plotly Express
-    fig = px.bar(melted_data, x='Year', y='Metric Value', color='Entity', barmode='group',
-                title='Trends of Wasting in Children (Weight Too Low for Their Height)',
-                labels={'Metric Value': 'Wasting', 'Entity': 'Country', 'Year': 'Year'})
-
-    # Update layout for better readability
-    fig.update_layout(xaxis_title='Year', yaxis_title='Wasting')
-
-    # Show the plot
-    st.plotly_chart(fig)
+        # Show the plot
+        st.plotly_chart(fig)
 
 
 
